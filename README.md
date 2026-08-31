@@ -1,9 +1,9 @@
-# sc.sh
+# scrcpy Desktop Launcher
 
-[![CI](https://github.com/cylee0909/sc.sh/actions/workflows/ci.yml/badge.svg)](https://github.com/cylee0909/sc.sh/actions/workflows/ci.yml)
+[![CI](https://github.com/cylee0909/scrcpy-desktop-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/cylee0909/scrcpy-desktop-launcher/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`sc.sh` 是一个面向 macOS 的 Android 桌面应用启动器。它基于 [scrcpy](https://github.com/Genymobile/scrcpy) 的虚拟显示能力，为键鼠操作、中文输入法以及部分手机应用的横竖屏行为提供了更适合桌面的默认配置。
+scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器。它基于 [scrcpy](https://github.com/Genymobile/scrcpy) 的虚拟显示能力，为键鼠操作、中文输入法以及部分手机应用的横竖屏行为提供了更适合桌面的默认配置。安装后的命令名为 `sc`。
 
 ## 特性
 
@@ -37,8 +37,8 @@ adb devices
 ## 安装
 
 ```sh
-git clone https://github.com/cylee0909/sc.sh.git
-cd sc.sh
+git clone https://github.com/cylee0909/scrcpy-desktop-launcher.git
+cd scrcpy-desktop-launcher
 make install
 ```
 
