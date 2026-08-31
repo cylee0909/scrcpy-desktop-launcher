@@ -1,6 +1,7 @@
 # sc.sh
 
 [![CI](https://github.com/cylee0909/sc.sh/actions/workflows/ci.yml/badge.svg)](https://github.com/cylee0909/sc.sh/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 `sc.sh` 是一个面向 macOS 的 Android 桌面应用启动器。它基于 [scrcpy](https://github.com/Genymobile/scrcpy) 的虚拟显示能力，为键鼠操作、中文输入法以及部分手机应用的横竖屏行为提供了更适合桌面的默认配置。
 
@@ -158,4 +159,4 @@ make check
 
 ## License
 
-本项目暂未指定开源许可证。
+本项目采用 [MIT License](LICENSE)。
