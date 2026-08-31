@@ -1,27 +1,35 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
+PROGRAM := scrcpy-desktop-launcher
+ALIASES := sc scrcpy-desktop
 
 .PHONY: install uninstall check test
 
 install:
 	install -d "$(DESTDIR)$(BINDIR)"
-	install -m 755 scrcpy-desktop "$(DESTDIR)$(BINDIR)/scrcpy-desktop"
-	@if [ -L "$(DESTDIR)$(BINDIR)/sc" ] && [ "$$(readlink "$(DESTDIR)$(BINDIR)/sc")" = scrcpy-desktop ]; then \
-		:; \
-	elif [ -e "$(DESTDIR)$(BINDIR)/sc" ] || [ -L "$(DESTDIR)$(BINDIR)/sc" ]; then \
-		echo "warning: $(BINDIR)/sc already exists; shortcut not installed" >&2; \
-	else \
-		ln -s scrcpy-desktop "$(DESTDIR)$(BINDIR)/sc"; \
-	fi
+	install -m 755 "$(PROGRAM)" "$(DESTDIR)$(BINDIR)/$(PROGRAM)"
+	@for alias in $(ALIASES); do \
+		path="$(DESTDIR)$(BINDIR)/$$alias"; \
+		if [ -L "$$path" ] && [ "$$(readlink "$$path")" = "$(PROGRAM)" ]; then \
+			:; \
+		elif [ -e "$$path" ] || [ -L "$$path" ]; then \
+			echo "warning: $(BINDIR)/$$alias already exists; shortcut not installed" >&2; \
+		else \
+			ln -s "$(PROGRAM)" "$$path"; \
+		fi; \
+	done
 
 uninstall:
-	@if [ -L "$(DESTDIR)$(BINDIR)/sc" ] && [ "$$(readlink "$(DESTDIR)$(BINDIR)/sc")" = scrcpy-desktop ]; then \
-		rm -f "$(DESTDIR)$(BINDIR)/sc"; \
-	fi
-	rm -f "$(DESTDIR)$(BINDIR)/scrcpy-desktop"
+	@for alias in $(ALIASES); do \
+		path="$(DESTDIR)$(BINDIR)/$$alias"; \
+		if [ -L "$$path" ] && [ "$$(readlink "$$path")" = "$(PROGRAM)" ]; then \
+			rm -f "$$path"; \
+		fi; \
+	done
+	rm -f "$(DESTDIR)$(BINDIR)/$(PROGRAM)"
 
 check:
-	zsh -n scrcpy-desktop tests/test.sh
+	zsh -n "$(PROGRAM)" tests/test.sh
 	zsh tests/test.sh
 
 test: check

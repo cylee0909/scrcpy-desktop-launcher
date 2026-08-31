@@ -5,7 +5,7 @@
 setopt local_options no_unset pipe_fail
 
 readonly PROGRAM_NAME="${0:t}"
-readonly VERSION="1.0.0"
+readonly VERSION="1.1.0"
 
 typeset app_query="飞书"
 typeset package_name=""
@@ -73,15 +73,15 @@ EOF
 }
 
 log() {
-  print -r -- "sc: $*"
+  print -r -- "$PROGRAM_NAME: $*"
 }
 
 warn() {
-  print -ru2 -- "sc: warning: $*"
+  print -ru2 -- "$PROGRAM_NAME: warning: $*"
 }
 
 die() {
-  print -ru2 -- "sc: error: $*"
+  print -ru2 -- "$PROGRAM_NAME: error: $*"
   exit 1
 }
 
@@ -392,7 +392,7 @@ show_doctor() {
   device_serial="$(adb_cmd get-serialno 2>/dev/null)"
   android_version="$(adb_cmd shell getprop ro.build.version.release 2>/dev/null)"
 
-  print -r -- "sc:      $VERSION"
+  printf '%-8s %s\n' "$PROGRAM_NAME:" "$VERSION"
   print -r -- "scrcpy:  $(scrcpy --version 2>/dev/null | command head -n 1)"
   print -r -- "adb:     $(adb version 2>/dev/null | command head -n 1)"
   print -r -- "device:  $device_serial"
