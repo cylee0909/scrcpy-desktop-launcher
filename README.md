@@ -3,7 +3,7 @@
 [![CI](https://github.com/cylee0909/scrcpy-desktop-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/cylee0909/scrcpy-desktop-launcher/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器。它基于 [scrcpy](https://github.com/Genymobile/scrcpy) 的虚拟显示能力，为键鼠操作、中文输入法以及部分手机应用的横竖屏行为提供了更适合桌面的默认配置。安装后的命令名为 `sc`。
+scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器。它基于 [scrcpy](https://github.com/Genymobile/scrcpy) 的虚拟显示能力，为键鼠操作、中文输入法以及部分手机应用的横竖屏行为提供了更适合桌面的默认配置。正式命令为 `scrcpy-desktop`，同时提供 `sc` 快捷入口。
 
 ## 特性
 
@@ -19,7 +19,7 @@ scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器�
 
 - macOS 与 `zsh`
 - Android Platform Tools（`adb`）
-- 支持虚拟显示相关参数的较新版本 `scrcpy`（可通过 `sc --doctor` 验证）
+- 支持虚拟显示相关参数的较新版本 `scrcpy`（可通过 `scrcpy-desktop --doctor` 验证）
 - 一台已开启 USB 调试并完成 ADB 授权的 Android 设备
 
 使用 Homebrew 安装依赖：
@@ -42,7 +42,7 @@ cd scrcpy-desktop-launcher
 make install
 ```
 
-默认安装为 `/usr/local/bin/sc`。可以通过 `PREFIX` 修改安装目录：
+默认安装 `/usr/local/bin/scrcpy-desktop`，并创建指向它的快捷入口 `/usr/local/bin/sc`。可以通过 `PREFIX` 修改安装目录：
 
 ```sh
 make install PREFIX="$HOME/.local"
@@ -54,29 +54,31 @@ make install PREFIX="$HOME/.local"
 make uninstall
 ```
 
-也可以不安装，直接运行 `./sc.sh`。
+也可以不安装，直接运行 `./scrcpy-desktop`。
 
 ## 快速开始
 
 ```sh
 # 默认启动飞书
-sc
+scrcpy-desktop
 
 # 使用内置别名
-sc 微信
-sc weread
-sc douyin
+scrcpy-desktop 微信
+scrcpy-desktop weread
+scrcpy-desktop douyin
 
 # 使用 Android 包名
-sc com.example.app
+scrcpy-desktop com.example.app
 
 # 精确匹配 scrcpy --list-apps 中的应用名称
-sc "Example App"
+scrcpy-desktop "Example App"
 
 # 透传 scrcpy 参数
-sc 微信 --no-audio
-sc com.example.app --max-fps=30
+scrcpy-desktop 微信 --no-audio
+scrcpy-desktop com.example.app --max-fps=30
 ```
+
+日常使用时也可以用完全等价的短命令，例如 `sc 微信`。如果系统中已经存在名为 `sc` 的命令，安装程序会保留原命令，仅安装 `scrcpy-desktop`。
 
 内置别名如下：
 
@@ -106,13 +108,13 @@ sc com.example.app --max-fps=30
 脚本自身的选项应放在应用名之前；应用名后的内容会全部传给 scrcpy：
 
 ```sh
-sc --serial 192.168.1.10:5555 --no-ime 微信 --no-audio
+scrcpy-desktop --serial 192.168.1.10:5555 --no-ime 微信 --no-audio
 ```
 
 如果只需要把参数传给 scrcpy，可以省略应用名：
 
 ```sh
-sc -- --no-audio
+scrcpy-desktop -- --no-audio
 ```
 
 ## 配置
@@ -129,8 +131,8 @@ sc -- --no-audio
 示例：
 
 ```sh
-SC_IME="com.example.ime/.ImeService" sc 飞书
-SC_VIDEO_ENCODER="c2.qti.avc.encoder" sc 微信
+SC_IME="com.example.ime/.ImeService" scrcpy-desktop 飞书
+SC_VIDEO_ENCODER="c2.qti.avc.encoder" scrcpy-desktop 微信
 ```
 
 输入法不存在时，脚本会给出警告并继续使用当前输入法。可用编码器可通过以下命令查询：

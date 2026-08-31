@@ -109,7 +109,7 @@ parse_args() {
         exit 0
         ;;
       -V|--version)
-        print -r -- "sc $VERSION"
+        print -r -- "$PROGRAM_NAME $VERSION"
         exit 0
         ;;
       -s|--serial)

@@ -4,7 +4,7 @@ setopt local_options errexit no_unset pipe_fail
 
 readonly TEST_DIR="${0:A:h}"
 readonly PROJECT_DIR="${TEST_DIR:h}"
-readonly SC="$PROJECT_DIR/sc.sh"
+readonly SC="$PROJECT_DIR/scrcpy-desktop"
 typeset sandbox
 typeset mock_bin
 typeset command_log
@@ -90,7 +90,7 @@ output="$($SC --help)"
 assert_contains "$output" 'Usage:' 'help is available'
 pass 'help'
 
-[[ "$($SC --version)" == 'sc 1.0.0' ]] || fail 'version is stable'
+[[ "$($SC --version)" == 'scrcpy-desktop 1.0.0' ]] || fail 'version is stable'
 pass 'version'
 
 output="$($SC --doctor)"
