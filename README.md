@@ -159,6 +159,10 @@ make check
 
 检查包括 zsh 语法验证和基于模拟 ADB/scrcpy 的命令行回归测试。
 
+## 项目调研
+
+参见[相关开源项目调研](docs/related-projects.md)，了解同类 CLI、TUI、GUI 和 Android 桌面方案，以及本项目的差异化方向。
+
 ## License
 
 本项目采用 [MIT License](LICENSE)。
