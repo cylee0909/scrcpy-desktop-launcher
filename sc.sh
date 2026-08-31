@@ -1,115 +1,483 @@
 #!/bin/zsh
 
-# Launch an Android app on a desktop-sized scrcpy virtual display.
-# Usage: sc.sh [app display name | package name] [scrcpy options]
+# Launch Android apps in a desktop-oriented scrcpy virtual display.
 
 setopt local_options no_unset pipe_fail
 
-# Treat scrcpy's UHID device as an external keyboard, so Android does not open
-# the full on-screen keyboard. Chinese composition is still handled by Sogou.
-adb shell settings put secure show_ime_with_hard_keyboard 0 >/dev/null 2>&1
-adb shell ime set com.sohu.inputmethod.sogou.xiaomi/.SogouIME >/dev/null 2>&1
+readonly PROGRAM_NAME="${0:t}"
+readonly VERSION="1.0.0"
 
-app="com.ss.android.lark"
-start_app="com.ss.android.lark"
-window_title="飞书 Desktop"
-display_size="1600x900/220"
-window_size_args=(--window-width=1600)
-mouse_args=(--mouse=uhid --mouse-bind=bhsn:++++)
+typeset app_query="飞书"
+typeset package_name=""
+typeset window_title=""
+typeset serial=""
+typeset display_size="${SC_DISPLAY_SIZE:-1600x900/220}"
+typeset portrait_display_size="${SC_PORTRAIT_DISPLAY_SIZE:-900x1600/220}"
+typeset ime_component="${SC_IME-com.sohu.inputmethod.sogou.xiaomi/.SogouIME}"
+typeset video_encoder="${SC_VIDEO_ENCODER:-}"
+typeset action="launch"
+typeset display_override=""
+typeset -i use_compat=1
+typeset -i cleanup_done=0
+typeset -i hard_keyboard_changed=0
+typeset -i ime_changed=0
+typeset -i compat_applied=0
+typeset compat_original_state="unset"
+typeset original_hard_keyboard=""
+typeset original_ime=""
+typeset compat_package=""
+typeset -a compat_changes=()
+typeset -a adb_args=()
+typeset -a scrcpy_device_args=()
+typeset -a scrcpy_extra_args=()
+typeset -a window_size_args=(--window-width=1600)
 
-# A non-option first argument is an app display name or package name.
-if (( $# > 0 )) && [[ "$1" != -* ]]; then
-  app="$1"
-  shift
-  window_title="${app} Desktop"
+usage() {
+  cat <<EOF
+Usage:
+  $PROGRAM_NAME [options] [app] [scrcpy options]
 
-  case "$app" in
-    微信) start_app="com.tencent.mm" ;;
-    微信读书) start_app="com.tencent.weread" ;;
-    飞书) start_app="com.ss.android.lark" ;;
-    抖音) start_app="com.ss.android.ugc.aweme" ;;
-    *.*) start_app="$app" ;;
+Launch an Android app in a desktop-sized scrcpy virtual display. If app is
+omitted, 飞书 (com.ss.android.lark) is launched. App may be a built-in alias,
+an exact display name from scrcpy --list-apps, or an Android package name.
+
+Options:
+  -s, --serial SERIAL       Select an ADB device by serial
+      --display SIZE        Set virtual display size (default: 1600x900/220)
+      --ime COMPONENT       Temporarily select an Android input method
+      --no-ime              Do not change the Android input method
+      --encoder NAME        Select a scrcpy video encoder
+      --no-compat           Disable app-specific Android compatibility fixes
+      --list-apps           List installed Android apps and exit
+      --doctor              Check dependencies and device connectivity
+      --dry-run             Print the scrcpy command without changing the device
+  -h, --help                Show this help
+  -V, --version             Show version
+
+Built-in aliases:
+  飞书, lark, feishu        com.ss.android.lark
+  微信, wechat              com.tencent.mm
+  微信读书, weread          com.tencent.weread
+  抖音, douyin              com.ss.android.ugc.aweme
+
+Examples:
+  $PROGRAM_NAME
+  $PROGRAM_NAME 微信
+  $PROGRAM_NAME --serial DEVICE_SERIAL 飞书
+  $PROGRAM_NAME com.example.app --no-audio
+  $PROGRAM_NAME --no-ime 微信 --max-fps=30
+
+Environment:
+  SC_DISPLAY_SIZE, SC_PORTRAIT_DISPLAY_SIZE, SC_IME, SC_VIDEO_ENCODER
+EOF
+}
+
+log() {
+  print -r -- "sc: $*"
+}
+
+warn() {
+  print -ru2 -- "sc: warning: $*"
+}
+
+die() {
+  print -ru2 -- "sc: error: $*"
+  exit 1
+}
+
+require_value() {
+  (( $# >= 2 )) || die "$1 requires a value"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+adb_cmd() {
+  command adb "${adb_args[@]}" "$@"
+}
+
+scrcpy_cmd() {
+  command scrcpy "${scrcpy_device_args[@]}" "$@"
+}
+
+parse_args() {
+  while (( $# > 0 )); do
+    case "$1" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -V|--version)
+        print -r -- "sc $VERSION"
+        exit 0
+        ;;
+      -s|--serial)
+        require_value "$@"
+        serial="$2"
+        shift 2
+        ;;
+      --serial=*)
+        serial="${1#*=}"
+        [[ -n "$serial" ]] || die "--serial requires a value"
+        shift
+        ;;
+      --display)
+        require_value "$@"
+        display_override="$2"
+        shift 2
+        ;;
+      --display=*)
+        display_override="${1#*=}"
+        [[ -n "$display_override" ]] || die "--display requires a value"
+        shift
+        ;;
+      --ime)
+        require_value "$@"
+        ime_component="$2"
+        shift 2
+        ;;
+      --ime=*)
+        ime_component="${1#*=}"
+        [[ -n "$ime_component" ]] || die "--ime requires a value"
+        shift
+        ;;
+      --no-ime)
+        ime_component=""
+        shift
+        ;;
+      --encoder)
+        require_value "$@"
+        video_encoder="$2"
+        shift 2
+        ;;
+      --encoder=*)
+        video_encoder="${1#*=}"
+        [[ -n "$video_encoder" ]] || die "--encoder requires a value"
+        shift
+        ;;
+      --no-compat)
+        use_compat=0
+        shift
+        ;;
+      --list-apps)
+        action="list-apps"
+        shift
+        ;;
+      --doctor)
+        action="doctor"
+        shift
+        ;;
+      --dry-run)
+        action="dry-run"
+        shift
+        ;;
+      --)
+        shift
+        scrcpy_extra_args=("$@")
+        return
+        ;;
+      -*)
+        # An unknown option belongs to scrcpy. Everything after it is passed
+        # through unchanged so options with separate values keep working.
+        scrcpy_extra_args=("$@")
+        return
+        ;;
+      *)
+        app_query="$1"
+        shift
+        scrcpy_extra_args=("$@")
+        return
+        ;;
+    esac
+  done
+}
+
+configure_device_selector() {
+  if [[ -n "$serial" ]]; then
+    adb_args=(-s "$serial")
+    scrcpy_device_args=(--serial "$serial")
+  fi
+}
+
+check_dependencies() {
+  require_command adb
+  require_command scrcpy
+  require_command awk
+}
+
+check_scrcpy_features() {
+  local help_text option
+  local -a missing_options=()
+  local -a required_options=(
+    --new-display
+    --start-app
+    --display-ime-policy
+    --no-vd-system-decorations
+    --no-vd-destroy-content
+  )
+
+  help_text="$(scrcpy --help 2>&1)" || die "could not inspect scrcpy capabilities"
+  for option in "${required_options[@]}"; do
+    [[ "$help_text" == *"$option"* ]] || missing_options+=("$option")
+  done
+
+  if (( ${#missing_options} > 0 )); then
+    die "scrcpy is too old or incompatible; missing options: ${missing_options[*]}. Upgrade scrcpy and try again"
+  fi
+}
+
+check_device() {
+  local state
+  state="$(adb_cmd get-state 2>/dev/null)" || {
+    if [[ -n "$serial" ]]; then
+      die "device '$serial' is unavailable or not authorized"
+    fi
+    die "no unique authorized Android device found; connect one or use --serial"
+  }
+  [[ "$state" == "device" ]] || die "Android device is not ready (state: $state)"
+}
+
+resolve_app() {
+  case "${app_query:l}" in
+    飞书|lark|feishu)
+      package_name="com.ss.android.lark"
+      [[ "$app_query" == "飞书" ]] || app_query="Lark"
+      ;;
+    微信|wechat)
+      package_name="com.tencent.mm"
+      [[ "$app_query" == "微信" ]] || app_query="WeChat"
+      ;;
+    微信读书|weread)
+      package_name="com.tencent.weread"
+      [[ "$app_query" == "微信读书" ]] || app_query="WeRead"
+      ;;
+    抖音|douyin)
+      package_name="com.ss.android.ugc.aweme"
+      [[ "$app_query" == "抖音" ]] || app_query="Douyin"
+      ;;
+    *.*)
+      package_name="$app_query"
+      ;;
     *)
-      # Resolve other names exactly; never use scrcpy's prefix matching.
-      start_app="$(command scrcpy --list-apps 2>/dev/null | awk -v target="$app" '
+      package_name="$(scrcpy_cmd --list-apps 2>/dev/null | awk -v target="$app_query" '
         $1 == "-" {
-          package_name = $NF
-          app_name = $0
-          sub(/^[[:space:]]*-[[:space:]]*/, "", app_name)
-          sub(/[[:space:]]+[^[:space:]]+$/, "", app_name)
-          if (app_name == target) {
-            print package_name
+          package = $NF
+          name = $0
+          sub(/^[[:space:]]*-[[:space:]]*/, "", name)
+          sub(/[[:space:]]+[^[:space:]]+$/, "", name)
+          if (name == target) {
+            print package
             exit
           }
         }
       ')"
-      if [[ -z "$start_app" ]]; then
-        print -u2 "sc: 未找到名称完全匹配的应用：$app"
-        print -u2 "sc: 请用 scrcpy --list-apps 查看应用名称或直接传入包名"
-        exit 1
-      fi
+      [[ -n "$package_name" ]] ||
+        die "app '$app_query' was not found; use --list-apps or pass a package name"
       ;;
   esac
-fi
 
-print "sc: 启动 $app [$start_app]"
+  window_title="${app_query} Desktop"
 
-# WeChat's UI thread stops processing key events when Android forces its
-# portrait-only activities into landscape. Give it a portrait virtual display
-# sized to fit comfortably on a desktop instead.
-if [[ "$start_app" == "com.tencent.mm" ]]; then
-  display_size="900x1600/220"
-  window_size_args=(--window-height=1000)
-fi
+  if [[ "$package_name" == "com.tencent.mm" ]]; then
+    display_size="$portrait_display_size"
+    window_size_args=(--window-height=1000)
+  fi
 
-# Some phone-first apps request portrait mode even on the landscape virtual
-# display. Apply package-scoped Android compatibility overrides only while
-# scrcpy is running, then restore the defaults on exit.
-compat_package=""
-compat_changes=()
+  if [[ -n "$display_override" ]]; then
+    display_size="$display_override"
+    window_size_args=()
+  fi
 
-case "$start_app" in
-  com.ss.android.lark)
-    compat_package="$start_app"
+  [[ "$display_size" =~ '^[0-9]+x[0-9]+(/[0-9]+)?$' ]] ||
+    die "invalid display size '$display_size' (expected WIDTHxHEIGHT or WIDTHxHEIGHT/DPI)"
+
+  if (( use_compat )) && [[ "$package_name" == "com.ss.android.lark" ]]; then
+    compat_package="$package_name"
     compat_changes=(254631730)
-    ;;
-esac
+  fi
+}
 
-if (( ${#compat_changes} > 0 )); then
-  for change_id in $compat_changes; do
-    adb shell am compat enable "$change_id" "$compat_package" >/dev/null 2>&1
+check_app_installed() {
+  adb_cmd shell pm path "$package_name" 2>/dev/null | command grep -q '^package:' ||
+    die "package '$package_name' is not installed on the selected device"
+}
+
+prepare_device() {
+  local installed_imes compat_dump compat_line
+
+  original_hard_keyboard="$(adb_cmd shell settings get secure show_ime_with_hard_keyboard 2>/dev/null)"
+  if [[ -n "$original_hard_keyboard" && "$original_hard_keyboard" != "0" ]]; then
+    if adb_cmd shell settings put secure show_ime_with_hard_keyboard 0 >/dev/null 2>&1; then
+      hard_keyboard_changed=1
+    else
+      warn "could not hide the on-screen keyboard"
+    fi
+  fi
+
+  if [[ -n "$ime_component" ]]; then
+    installed_imes="$(adb_cmd shell ime list -s 2>/dev/null)"
+    if print -r -- "$installed_imes" | command grep -Fxq -- "$ime_component"; then
+      original_ime="$(adb_cmd shell settings get secure default_input_method 2>/dev/null)"
+      if [[ -n "$original_ime" && "$original_ime" != "null" && "$original_ime" != "$ime_component" ]]; then
+        if adb_cmd shell ime set "$ime_component" >/dev/null 2>&1; then
+          ime_changed=1
+        else
+          warn "could not select input method '$ime_component'"
+        fi
+      fi
+    else
+      warn "input method '$ime_component' is not installed; keeping the current input method"
+    fi
+  fi
+
+  if (( ${#compat_changes} > 0 )); then
+    local change_id
+    compat_dump="$(adb_cmd shell dumpsys platform_compat 2>/dev/null)"
+    for change_id in "${compat_changes[@]}"; do
+      compat_original_state="unset"
+      compat_line="$(print -r -- "$compat_dump" | command grep -m 1 "ChangeId($change_id;" || true)"
+      if [[ "$compat_line" == *"$compat_package=true"* ]]; then
+        compat_original_state="enabled"
+        continue
+      elif [[ "$compat_line" == *"$compat_package=false"* ]]; then
+        compat_original_state="disabled"
+      fi
+
+      if adb_cmd shell am compat enable "$change_id" "$compat_package" >/dev/null 2>&1; then
+        compat_applied=1
+      else
+        warn "could not enable Android compatibility change $change_id"
+      fi
+    done
+  fi
+}
+
+cleanup_device() {
+  local exit_status=$?
+  (( cleanup_done )) && return "$exit_status"
+  cleanup_done=1
+
+  if (( compat_applied )); then
+    local change_id
+    for change_id in "${compat_changes[@]}"; do
+      if [[ "$compat_original_state" == "disabled" ]]; then
+        adb_cmd shell am compat disable "$change_id" "$compat_package" >/dev/null 2>&1 || true
+      else
+        adb_cmd shell am compat reset "$change_id" "$compat_package" >/dev/null 2>&1 || true
+      fi
+    done
+  fi
+
+  if (( ime_changed )); then
+    adb_cmd shell ime set "$original_ime" >/dev/null 2>&1 ||
+      warn "could not restore input method '$original_ime'"
+  fi
+
+  if (( hard_keyboard_changed )); then
+    if [[ "$original_hard_keyboard" == "null" ]]; then
+      adb_cmd shell settings delete secure show_ime_with_hard_keyboard >/dev/null 2>&1 || true
+    else
+      adb_cmd shell settings put secure show_ime_with_hard_keyboard "$original_hard_keyboard" >/dev/null 2>&1 ||
+        warn "could not restore the on-screen keyboard setting"
+    fi
+  fi
+
+  return "$exit_status"
+}
+
+show_doctor() {
+  local device_serial android_version help_text option
+  local -a missing_options=()
+  device_serial="$(adb_cmd get-serialno 2>/dev/null)"
+  android_version="$(adb_cmd shell getprop ro.build.version.release 2>/dev/null)"
+
+  print -r -- "sc:      $VERSION"
+  print -r -- "scrcpy:  $(scrcpy --version 2>/dev/null | command head -n 1)"
+  print -r -- "adb:     $(adb version 2>/dev/null | command head -n 1)"
+  print -r -- "device:  $device_serial"
+  print -r -- "Android: $android_version"
+
+  help_text="$(scrcpy --help 2>&1)" || true
+  for option in --new-display --start-app --display-ime-policy --no-vd-system-decorations --no-vd-destroy-content; do
+    [[ "$help_text" == *"$option"* ]] || missing_options+=("$option")
   done
 
-  cleanup_compat() {
-    for change_id in $compat_changes; do
-      adb shell am compat reset "$change_id" "$compat_package" >/dev/null 2>&1
-    done
-  }
-  trap cleanup_compat EXIT HUP INT TERM
-fi
+  if (( ${#missing_options} > 0 )); then
+    print -ru2 -- "status:  incompatible scrcpy (missing: ${missing_options[*]})"
+    return 1
+  fi
 
-# Keep the IME on the virtual display that owns the focused editor. Sending it
-# to display 0 (fallback) breaks Sogou hardware-keyboard composition. Android
-# still hides the full keyboard via show_ime_with_hard_keyboard=0.
-scrcpy_args=(
-  --keyboard=uhid
-  $mouse_args
-  --stay-awake
-  --video-codec=h264
-  --video-encoder=c2.qti.avc.encoder
-  --video-codec-options=low-latency=1
-  --video-bit-rate=8M
-  --video-buffer=0
-  --max-fps=60
-  --render-driver=metal
-  --fullscreen
-  --new-display="$display_size"
-  --start-app="$start_app"
-  --display-ime-policy=local
-  --no-vd-system-decorations
-  --no-vd-destroy-content
-  $window_size_args
-  --window-title="$window_title"
-)
+  print -r -- "status:  ready"
+}
 
-command scrcpy "${scrcpy_args[@]}" "$@"
+build_scrcpy_args() {
+  reply=(
+    --keyboard=uhid
+    --mouse=uhid
+    --mouse-bind=bhsn:++++
+    --stay-awake
+    --video-codec=h264
+    --video-bit-rate=8M
+    --video-buffer=0
+    --max-fps=60
+    --fullscreen
+    --new-display="$display_size"
+    --start-app="$package_name"
+    --display-ime-policy=local
+    --no-vd-system-decorations
+    --no-vd-destroy-content
+    "${window_size_args[@]}"
+    --window-title="$window_title"
+  )
+
+  if [[ -n "$video_encoder" ]]; then
+    reply+=(--video-encoder="$video_encoder")
+  fi
+
+  reply+=("${scrcpy_extra_args[@]}")
+}
+
+main() {
+  parse_args "$@"
+  configure_device_selector
+  check_dependencies
+  check_device
+
+  case "$action" in
+    list-apps)
+      scrcpy_cmd --list-apps
+      return $?
+      ;;
+    doctor)
+      show_doctor
+      return $?
+      ;;
+  esac
+
+  check_scrcpy_features
+  resolve_app
+  check_app_installed
+
+  typeset -a launch_args
+  build_scrcpy_args
+  launch_args=("${reply[@]}")
+
+  if [[ "$action" == "dry-run" ]]; then
+    typeset -a full_command=(scrcpy "${scrcpy_device_args[@]}" "${launch_args[@]}")
+    printf '%q ' "${full_command[@]}"
+    print
+    return 0
+  fi
+
+  trap cleanup_device EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  prepare_device
+  log "launching $app_query [$package_name]"
+  scrcpy_cmd "${launch_args[@]}"
+}
+
+main "$@"
