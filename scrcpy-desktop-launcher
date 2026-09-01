@@ -5,14 +5,13 @@
 setopt local_options no_unset pipe_fail
 
 readonly PROGRAM_NAME="${0:t}"
-readonly VERSION="1.2.2"
+readonly VERSION="1.2.4"
 
 typeset app_query="飞书"
 typeset package_name=""
 typeset window_title=""
 typeset serial=""
 typeset display_size="${SC_DISPLAY_SIZE:-2560x1440/240}"
-typeset portrait_display_size="${SC_PORTRAIT_DISPLAY_SIZE:-900x1600/220}"
 typeset ime_component="${SC_IME-com.sohu.inputmethod.sogou.xiaomi/.SogouIME}"
 typeset video_encoder="${SC_VIDEO_ENCODER:-}"
 typeset host_input_source="${SC_HOST_INPUT_SOURCE:-com.apple.keylayout.US}"
@@ -73,8 +72,7 @@ Examples:
   $PROGRAM_NAME --no-ime 微信 --max-fps=30
 
 Environment:
-  SC_DISPLAY_SIZE, SC_PORTRAIT_DISPLAY_SIZE, SC_IME, SC_VIDEO_ENCODER
-  SC_HOST_INPUT_SOURCE
+  SC_DISPLAY_SIZE, SC_IME, SC_VIDEO_ENCODER, SC_HOST_INPUT_SOURCE
 EOF
 }
 
@@ -289,11 +287,6 @@ resolve_app() {
 
   window_title="${app_query} Desktop"
 
-  if [[ "$package_name" == "com.tencent.mm" ]]; then
-    display_size="$portrait_display_size"
-    window_size_args=(--window-height=1000)
-  fi
-
   if [[ -n "$display_override" ]]; then
     display_size="$display_override"
     window_size_args=()
@@ -302,9 +295,17 @@ resolve_app() {
   [[ "$display_size" =~ '^[0-9]+x[0-9]+(/[0-9]+)?$' ]] ||
     die "invalid display size '$display_size' (expected WIDTHxHEIGHT or WIDTHxHEIGHT/DPI)"
 
-  if (( use_compat )) && [[ "$package_name" == "com.ss.android.lark" ]]; then
-    compat_package="$package_name"
-    compat_changes=(254631730)
+  if (( use_compat )); then
+    case "$package_name" in
+      com.ss.android.lark)
+        compat_package="$package_name"
+        compat_changes=(254631730)
+        ;;
+      com.tencent.mm)
+        compat_package="$package_name"
+        compat_changes=(310816437)
+        ;;
+    esac
   fi
 }
 

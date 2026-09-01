@@ -8,7 +8,8 @@ scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器�
 ## 特性
 
 - 通过中文名、英文别名、完整应用名或包名启动应用
-- 默认创建 `2560x1440/240` 高分辨率桌面虚拟显示器并以窗口模式启动，微信自动使用竖屏布局
+- 默认创建 `2560x1440/240` 高分辨率桌面虚拟显示器并以窗口模式启动
+- 为飞书和微信临时应用 Android 兼容性覆盖，使其适应横屏桌面布局
 - 使用 UHID 键盘，并保留 scrcpy 默认的鼠标控制方式
 - 自动检查依赖、ADB 连接状态和目标应用
 - 临时切换输入法与 Android 兼容性选项，退出时恢复原始状态
@@ -128,7 +129,6 @@ scrcpy-desktop-launcher -- --no-audio
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
 | `SC_DISPLAY_SIZE` | `2560x1440/240` | 横屏虚拟显示尺寸和 DPI |
-| `SC_PORTRAIT_DISPLAY_SIZE` | `900x1600/220` | 微信竖屏虚拟显示尺寸 |
 | `SC_IME` | `com.sohu.inputmethod.sogou.xiaomi/.SogouIME` | 启动期间使用的输入法 |
 | `SC_VIDEO_ENCODER` | 空 | 指定视频编码器；为空时由 scrcpy 自动选择 |
 | `SC_HOST_INPUT_SOURCE` | `com.apple.keylayout.US` | 启动期间使用的 macOS 英文输入源 |
@@ -156,7 +156,7 @@ scrcpy --list-encoders
 - `show_ime_with_hard_keyboard` 设置
 - 当前输入法（仅当配置的输入法已经安装）
 - macOS 当前输入源（仅在成功自动切换后）
-- 飞书所需的包级 Android 兼容性变更
+- 飞书和微信所需的包级 Android 兼容性变更
 
 进程被强制执行 `SIGKILL` 时，任何程序都无法运行清理逻辑。如果发生这种情况，再次正常启动和退出脚本，或手动恢复相关设置。
 

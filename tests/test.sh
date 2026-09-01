@@ -100,7 +100,7 @@ output="$($SC --help)"
 assert_contains "$output" 'Usage:' 'help is available'
 pass 'help'
 
-[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.2.2' ]] || fail 'version is stable'
+[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.2.4' ]] || fail 'version is stable'
 pass 'version'
 
 output="$($SC --doctor)"
@@ -124,9 +124,11 @@ pass 'portable default command'
 SC_IME='' $SC --dry-run 微信 --no-audio > "$sandbox/output"
 output="$(<"$sandbox/output")"
 assert_contains "$output" '--start-app=com.tencent.mm' 'WeChat alias resolves'
-assert_contains "$output" '--new-display=900x1600/220' 'WeChat uses portrait display'
+assert_contains "$output" '--new-display=2560x1440/240' 'WeChat uses the desktop display profile'
+assert_contains "$output" '--window-width=1600' 'WeChat uses the desktop window size'
+assert_not_contains "$output" '--fullscreen' 'WeChat launches in a window'
 assert_contains "$output" '--no-audio' 'scrcpy options pass through'
-pass 'WeChat profile and passthrough'
+pass 'WeChat desktop profile and passthrough'
 
 : > "$command_log"
 SC_IME='' $SC --serial emulator-5554 --dry-run com.example.app > /dev/null
@@ -155,6 +157,8 @@ set -e
 command_output="$(<"$command_log")"
 assert_contains "$command_output" 'settings put secure show_ime_with_hard_keyboard 1' 'cleanup runs after failure'
 assert_contains "$command_output" 'macism com.sogou.inputmethod.sogou.pinyin' 'host input source is restored after failure'
+assert_contains "$command_output" 'am compat enable 310816437 com.tencent.mm' 'WeChat orientation override is enabled'
+assert_contains "$command_output" 'am compat reset 310816437 com.tencent.mm' 'WeChat orientation override is reset'
 pass 'failure status and cleanup'
 
 : > "$command_log"
@@ -162,6 +166,12 @@ $SC --no-host-ime-switch --no-ime 微信 > /dev/null
 command_output="$(<"$command_log")"
 assert_not_contains "$command_output" 'macism ' 'host input source switch can be disabled'
 pass 'disabled host input source switch'
+
+: > "$command_log"
+$SC --no-compat --no-host-ime-switch --no-ime 微信 > /dev/null
+command_output="$(<"$command_log")"
+assert_not_contains "$command_output" 'am compat ' 'WeChat orientation override can be disabled'
+pass 'disabled app compatibility fixes'
 
 : > "$command_log"
 SC_HOST_INPUT_SOURCE='com.example.English' $SC --no-ime 微信 > /dev/null
