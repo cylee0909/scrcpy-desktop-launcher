@@ -5,13 +5,13 @@
 setopt local_options no_unset pipe_fail
 
 readonly PROGRAM_NAME="${0:t}"
-readonly VERSION="1.2.0"
+readonly VERSION="1.2.2"
 
 typeset app_query="飞书"
 typeset package_name=""
 typeset window_title=""
 typeset serial=""
-typeset display_size="${SC_DISPLAY_SIZE:-1600x900/220}"
+typeset display_size="${SC_DISPLAY_SIZE:-2560x1440/240}"
 typeset portrait_display_size="${SC_PORTRAIT_DISPLAY_SIZE:-900x1600/220}"
 typeset ime_component="${SC_IME-com.sohu.inputmethod.sogou.xiaomi/.SogouIME}"
 typeset video_encoder="${SC_VIDEO_ENCODER:-}"
@@ -47,7 +47,7 @@ an exact display name from scrcpy --list-apps, or an Android package name.
 
 Options:
   -s, --serial SERIAL       Select an ADB device by serial
-      --display SIZE        Set virtual display size (default: 1600x900/220)
+      --display SIZE        Set virtual display size (default: 2560x1440/240)
       --ime COMPONENT       Temporarily select an Android input method
       --no-ime              Do not change the Android input method
       --no-host-ime-switch  Do not switch the macOS input source to English
@@ -464,10 +464,9 @@ build_scrcpy_args() {
     --keyboard=uhid
     --stay-awake
     --video-codec=h264
-    --video-bit-rate=8M
+    --video-bit-rate=16M
     --video-buffer=0
     --max-fps=60
-    --fullscreen
     --new-display="$display_size"
     --start-app="$package_name"
     --display-ime-policy=local

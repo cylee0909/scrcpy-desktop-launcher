@@ -100,7 +100,7 @@ output="$($SC --help)"
 assert_contains "$output" 'Usage:' 'help is available'
 pass 'help'
 
-[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.2.0' ]] || fail 'version is stable'
+[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.2.2' ]] || fail 'version is stable'
 pass 'version'
 
 output="$($SC --doctor)"
@@ -111,7 +111,9 @@ pass 'doctor'
 SC_IME='' $SC --dry-run > "$sandbox/output"
 output="$(<"$sandbox/output")"
 assert_contains "$output" '--start-app=com.ss.android.lark' 'default app is Lark'
-assert_contains "$output" '--new-display=1600x900/220' 'default display is landscape'
+assert_contains "$output" '--new-display=2560x1440/240' 'default display is high-resolution landscape with compact UI'
+assert_contains "$output" '--video-bit-rate=16M' 'default video bit rate preserves detail'
+assert_not_contains "$output" '--fullscreen' 'default launch uses a window'
 assert_contains "$output" '--keyboard=uhid' 'UHID keyboard remains enabled'
 assert_not_contains "$output" '--mouse=uhid' 'UHID mouse is disabled'
 assert_not_contains "$output" '--mouse-bind=' 'UHID mouse bindings are removed'
