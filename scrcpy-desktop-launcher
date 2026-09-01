@@ -5,7 +5,7 @@
 setopt local_options no_unset pipe_fail
 
 readonly PROGRAM_NAME="${0:t}"
-readonly VERSION="1.1.0"
+readonly VERSION="1.2.0"
 
 typeset app_query="飞书"
 typeset package_name=""
@@ -15,16 +15,20 @@ typeset display_size="${SC_DISPLAY_SIZE:-1600x900/220}"
 typeset portrait_display_size="${SC_PORTRAIT_DISPLAY_SIZE:-900x1600/220}"
 typeset ime_component="${SC_IME-com.sohu.inputmethod.sogou.xiaomi/.SogouIME}"
 typeset video_encoder="${SC_VIDEO_ENCODER:-}"
+typeset host_input_source="${SC_HOST_INPUT_SOURCE:-com.apple.keylayout.US}"
 typeset action="launch"
 typeset display_override=""
 typeset -i use_compat=1
+typeset -i use_host_ime_switch=1
 typeset -i cleanup_done=0
 typeset -i hard_keyboard_changed=0
 typeset -i ime_changed=0
+typeset -i host_input_source_changed=0
 typeset -i compat_applied=0
 typeset compat_original_state="unset"
 typeset original_hard_keyboard=""
 typeset original_ime=""
+typeset original_host_input_source=""
 typeset compat_package=""
 typeset -a compat_changes=()
 typeset -a adb_args=()
@@ -46,6 +50,7 @@ Options:
       --display SIZE        Set virtual display size (default: 1600x900/220)
       --ime COMPONENT       Temporarily select an Android input method
       --no-ime              Do not change the Android input method
+      --no-host-ime-switch  Do not switch the macOS input source to English
       --encoder NAME        Select a scrcpy video encoder
       --no-compat           Disable app-specific Android compatibility fixes
       --list-apps           List installed Android apps and exit
@@ -69,6 +74,7 @@ Examples:
 
 Environment:
   SC_DISPLAY_SIZE, SC_PORTRAIT_DISPLAY_SIZE, SC_IME, SC_VIDEO_ENCODER
+  SC_HOST_INPUT_SOURCE
 EOF
 }
 
@@ -144,6 +150,10 @@ parse_args() {
         ;;
       --no-ime)
         ime_component=""
+        shift
+        ;;
+      --no-host-ime-switch)
+        use_host_ime_switch=0
         shift
         ;;
       --encoder)
@@ -303,6 +313,33 @@ check_app_installed() {
     die "package '$package_name' is not installed on the selected device"
 }
 
+prepare_host_input_source() {
+  (( use_host_ime_switch )) || return 0
+
+  if ! command -v macism >/dev/null 2>&1; then
+    warn "macism is not installed; switch macOS to an English input source before typing (or reinstall with 'make install')"
+    return 0
+  fi
+
+  original_host_input_source="$(command macism 2>/dev/null)" || {
+    original_host_input_source=""
+    warn "could not read the current macOS input source"
+    return 0
+  }
+
+  [[ -n "$original_host_input_source" ]] || {
+    warn "could not read the current macOS input source"
+    return 0
+  }
+  [[ "$original_host_input_source" == "$host_input_source" ]] && return 0
+
+  if command macism "$host_input_source" >/dev/null 2>&1; then
+    host_input_source_changed=1
+  else
+    warn "could not switch macOS input source to '$host_input_source'"
+  fi
+}
+
 prepare_device() {
   local installed_imes compat_dump compat_line
 
@@ -383,11 +420,16 @@ cleanup_device() {
     fi
   fi
 
+  if (( host_input_source_changed )); then
+    command macism "$original_host_input_source" >/dev/null 2>&1 ||
+      warn "could not restore macOS input source '$original_host_input_source'"
+  fi
+
   return "$exit_status"
 }
 
 show_doctor() {
-  local device_serial android_version help_text option
+  local device_serial android_version help_text option host_ime_status
   local -a missing_options=()
   device_serial="$(adb_cmd get-serialno 2>/dev/null)"
   android_version="$(adb_cmd shell getprop ro.build.version.release 2>/dev/null)"
@@ -397,6 +439,12 @@ show_doctor() {
   print -r -- "adb:     $(adb version 2>/dev/null | command head -n 1)"
   print -r -- "device:  $device_serial"
   print -r -- "Android: $android_version"
+  if command -v macism >/dev/null 2>&1; then
+    host_ime_status="$(command macism 2>/dev/null || print -r -- unknown)"
+    print -r -- "host IME: macism ($host_ime_status)"
+  else
+    print -r -- "host IME: unavailable (install macism or use --no-host-ime-switch)"
+  fi
 
   help_text="$(scrcpy --help 2>&1)" || true
   for option in --new-display --start-app --display-ime-policy --no-vd-system-decorations --no-vd-destroy-content; do
@@ -414,8 +462,6 @@ show_doctor() {
 build_scrcpy_args() {
   reply=(
     --keyboard=uhid
-    --mouse=uhid
-    --mouse-bind=bhsn:++++
     --stay-awake
     --video-codec=h264
     --video-bit-rate=8M
@@ -475,6 +521,7 @@ main() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
+  prepare_host_input_source
   prepare_device
   log "launching $app_query [$package_name]"
   scrcpy_cmd "${launch_args[@]}"

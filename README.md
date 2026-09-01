@@ -9,7 +9,7 @@ scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器�
 
 - 通过中文名、英文别名、完整应用名或包名启动应用
 - 默认创建 `1600x900` 桌面虚拟显示器，微信自动使用竖屏布局
-- 使用 UHID 键盘和鼠标，降低 Android 应用与桌面输入习惯之间的差异
+- 使用 UHID 键盘，并保留 scrcpy 默认的鼠标控制方式
 - 自动检查依赖、ADB 连接状态和目标应用
 - 临时切换输入法与 Android 兼容性选项，退出时恢复原始状态
 - 支持多设备选择、编码器覆盖、诊断及 dry-run
@@ -17,9 +17,10 @@ scrcpy Desktop Launcher 是一个面向 macOS 的 Android 桌面应用启动器�
 
 ## 系统要求
 
-- macOS 与 `zsh`
+- macOS、`zsh` 与 Homebrew
 - Android Platform Tools（`adb`）
 - 支持虚拟显示相关参数的较新版本 `scrcpy`（可通过 `scrcpy-desktop-launcher --doctor` 验证）
+- `macism`（`make install` 会自动安装，用于启动前切换 macOS 输入源并在退出后恢复）
 - 一台已开启 USB 调试并完成 ADB 授权的 Android 设备
 
 使用 Homebrew 安装依赖：
@@ -41,6 +42,8 @@ git clone https://github.com/cylee0909/scrcpy-desktop-launcher.git
 cd scrcpy-desktop-launcher
 make install
 ```
+
+安装过程会检查 `macism`，缺少时通过 Homebrew 自动安装。
 
 默认安装 `/usr/local/bin/scrcpy-desktop-launcher`，并创建快捷入口 `/usr/local/bin/sc`。为兼容早期版本，还会创建 `/usr/local/bin/scrcpy-desktop`。可以通过 `PREFIX` 修改安装目录：
 
@@ -96,6 +99,7 @@ scrcpy-desktop-launcher com.example.app --max-fps=30
     --display SIZE        设置虚拟显示尺寸
     --ime COMPONENT       临时选择 Android 输入法
     --no-ime              不切换 Android 输入法
+    --no-host-ime-switch  不自动切换 macOS 输入源
     --encoder NAME        指定 scrcpy 视频编码器
     --no-compat           禁用应用专用的 Android 兼容性修复
     --list-apps           列出已安装应用
@@ -127,13 +131,17 @@ scrcpy-desktop-launcher -- --no-audio
 | `SC_PORTRAIT_DISPLAY_SIZE` | `900x1600/220` | 微信竖屏虚拟显示尺寸 |
 | `SC_IME` | `com.sohu.inputmethod.sogou.xiaomi/.SogouIME` | 启动期间使用的输入法 |
 | `SC_VIDEO_ENCODER` | 空 | 指定视频编码器；为空时由 scrcpy 自动选择 |
+| `SC_HOST_INPUT_SOURCE` | `com.apple.keylayout.US` | 启动期间使用的 macOS 英文输入源 |
 
 示例：
 
 ```sh
 SC_IME="com.example.ime/.ImeService" scrcpy-desktop-launcher 飞书
 SC_VIDEO_ENCODER="c2.qti.avc.encoder" scrcpy-desktop-launcher 微信
+SC_HOST_INPUT_SOURCE="com.apple.keylayout.ABC" scrcpy-desktop-launcher 飞书
 ```
+
+启动器默认使用 `macism` 记录当前 macOS 输入源，切换到 `U.S.` 英文键盘，然后由 Android 端输入法处理中文；scrcpy 退出时会恢复原输入源。临时不需要该行为时使用 `--no-host-ime-switch`。
 
 输入法不存在时，脚本会给出警告并继续使用当前输入法。可用编码器可通过以下命令查询：
 
@@ -147,6 +155,7 @@ scrcpy --list-encoders
 
 - `show_ime_with_hard_keyboard` 设置
 - 当前输入法（仅当配置的输入法已经安装）
+- macOS 当前输入源（仅在成功自动切换后）
 - 飞书所需的包级 Android 兼容性变更
 
 进程被强制执行 `SIGKILL` 时，任何程序都无法运行清理逻辑。如果发生这种情况，再次正常启动和退出脚本，或手动恢复相关设置。

@@ -58,7 +58,17 @@ esac
 exit "${SC_TEST_SCRCPY_EXIT:-0}"
 MOCK_SCRCPY
 
-chmod +x "$mock_bin/adb" "$mock_bin/scrcpy"
+cat > "$mock_bin/macism" <<'MOCK_MACISM'
+#!/bin/sh
+if [ "$#" -eq 0 ]; then
+  printf '%s\n' "${SC_TEST_HOST_INPUT_SOURCE:-com.sogou.inputmethod.sogou.pinyin}"
+  exit 0
+fi
+printf 'macism %s\n' "$1" >> "$SC_TEST_LOG"
+exit "${SC_TEST_MACISM_EXIT:-0}"
+MOCK_MACISM
+
+chmod +x "$mock_bin/adb" "$mock_bin/scrcpy" "$mock_bin/macism"
 export PATH="$mock_bin:$PATH"
 export SC_TEST_LOG="$command_log"
 
@@ -90,7 +100,7 @@ output="$($SC --help)"
 assert_contains "$output" 'Usage:' 'help is available'
 pass 'help'
 
-[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.1.0' ]] || fail 'version is stable'
+[[ "$($SC --version)" == 'scrcpy-desktop-launcher 1.2.0' ]] || fail 'version is stable'
 pass 'version'
 
 output="$($SC --doctor)"
@@ -102,6 +112,9 @@ SC_IME='' $SC --dry-run > "$sandbox/output"
 output="$(<"$sandbox/output")"
 assert_contains "$output" '--start-app=com.ss.android.lark' 'default app is Lark'
 assert_contains "$output" '--new-display=1600x900/220' 'default display is landscape'
+assert_contains "$output" '--keyboard=uhid' 'UHID keyboard remains enabled'
+assert_not_contains "$output" '--mouse=uhid' 'UHID mouse is disabled'
+assert_not_contains "$output" '--mouse-bind=' 'UHID mouse bindings are removed'
 assert_not_contains "$output" 'c2.qti.avc.encoder' 'encoder is portable by default'
 pass 'portable default command'
 
@@ -123,9 +136,11 @@ pass 'device selection'
 $SC 飞书 > /dev/null
 command_output="$(<"$command_log")"
 assert_contains "$command_output" 'settings put secure show_ime_with_hard_keyboard 0' 'keyboard setting changes'
+assert_contains "$command_output" 'macism com.apple.keylayout.US' 'host input source switches to English'
 assert_contains "$command_output" 'ime set com.sohu.inputmethod.sogou.xiaomi/.SogouIME' 'configured IME is selected'
 assert_contains "$command_output" 'ime set com.example.original/.IME' 'original IME is restored'
 assert_contains "$command_output" 'settings put secure show_ime_with_hard_keyboard 1' 'keyboard setting is restored'
+assert_contains "$command_output" 'macism com.sogou.inputmethod.sogou.pinyin' 'host input source is restored'
 assert_contains "$command_output" 'am compat reset 254631730 com.ss.android.lark' 'compatibility change is reset'
 pass 'device state cleanup'
 
@@ -137,7 +152,21 @@ set -e
 (( exit_code == 23 )) || fail 'scrcpy exit status is preserved'
 command_output="$(<"$command_log")"
 assert_contains "$command_output" 'settings put secure show_ime_with_hard_keyboard 1' 'cleanup runs after failure'
+assert_contains "$command_output" 'macism com.sogou.inputmethod.sogou.pinyin' 'host input source is restored after failure'
 pass 'failure status and cleanup'
+
+: > "$command_log"
+$SC --no-host-ime-switch --no-ime 微信 > /dev/null
+command_output="$(<"$command_log")"
+assert_not_contains "$command_output" 'macism ' 'host input source switch can be disabled'
+pass 'disabled host input source switch'
+
+: > "$command_log"
+SC_HOST_INPUT_SOURCE='com.example.English' $SC --no-ime 微信 > /dev/null
+command_output="$(<"$command_log")"
+assert_contains "$command_output" 'macism com.example.English' 'custom host input source is selected'
+assert_contains "$command_output" 'macism com.sogou.inputmethod.sogou.pinyin' 'custom input source switch is restored'
+pass 'custom host input source'
 
 : > "$command_log"
 SC_IME='' $SC --dry-run 'Example App' > "$sandbox/output"
